@@ -1,3 +1,4 @@
 /target
 lndk.conf*
 /.vscode
+.DS_Store

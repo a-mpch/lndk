@@ -1,0 +1,74 @@
+services:
+  bitcoind:
+    image: lncm/bitcoind:v27.0
+    restart: unless-stopped
+    networks:
+      playground-net:
+        ipv4_address: 172.30.1.1
+    volumes:
+      - "bitcoind:/data/.bitcoin"
+      - "./conf/bitcoind/bitcoin.conf:/data/.bitcoin/bitcoin.conf"
+    ports:
+      - "18443:18443"
+
+  lnd1:
+    image: lightninglabs/lnd:v0.18.2-beta
+    restart: unless-stopped
+    depends_on:
+      - bitcoind
+    networks:
+      playground-net:
+        ipv4_address: 172.30.1.2
+    command: --externalip=172.30.1.2 --externalip=lnd1:9735 --tlsextradomain=lnd1 --alias=lnd1 --color=#89CFF0
+    volumes:
+      - "lnd1:/root/.lnd"
+      - "./conf/lnd/lnd.conf:/root/.lnd/lnd.conf"
+    ports:
+      - "10009:10009"
+
+  eclair1:
+    image: lnzap/eclair:0.10.0.strike.2
+    restart: unless-stopped
+    depends_on:
+      - bitcoind
+    networks:
+      playground-net:
+        ipv4_address: 172.30.1.31
+    environment:
+      - JAVA_OPTS=-Declair.printToConsole -Dakka.loglevel=DEBUG -Dlogback.configurationFile=/eclair/logback-custom.xml
+    volumes:
+      - "eclair1:/data"
+      - "./conf/eclair/eclair.conf:/eclair/eclair.conf"
+      - "./conf/eclair/logback-custom.xml:/eclair/logback-custom.xml"
+    ports:
+      - "9700:9700"
+
+  eclair2:
+    image: lnzap/eclair:0.10.0.strike.2
+    restart: unless-stopped
+    depends_on:
+      - bitcoind
+    networks:
+      playground-net:
+        ipv4_address: 172.30.2.31
+    environment:
+      - JAVA_OPTS=-Declair.printToConsole -Dakka.loglevel=DEBUG -Dlogback.configurationFile=/eclair/logback-custom.xml
+    volumes:
+      - "eclair2:/data"
+      - "./conf/eclair/eclair2.conf:/eclair/eclair.conf"
+      - "./conf/eclair/logback-custom.xml:/eclair/logback-custom.xml"
+    ports:
+      - "9800:9800"
+
+volumes:
+  bitcoind:
+  lnd1:
+  eclair1:
+  eclair2:
+
+networks:
+  playground-net:
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.30.0.0/16

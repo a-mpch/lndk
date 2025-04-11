@@ -331,7 +331,7 @@ impl LndNode {
             format!("--tlscertpath={}", cert_path),
             format!("--tlskeypath={}", key_path),
             format!("--logdir={}", log_dir.display()),
-            format!("--debuglevel=debug,PEER=debug"),
+            format!("--debuglevel=info,PEER=info,RPCS=info,RPCP=info"),
             format!("--bitcoind.rpcuser={}", cookie_values.user),
             format!("--bitcoind.rpcpass={}", cookie_values.password),
             format!(

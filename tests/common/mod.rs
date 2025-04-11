@@ -14,7 +14,6 @@ use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::thread;
 use std::{env, fs};
 use tempfile::{tempdir, Builder, TempDir};
 use tokio::time::{sleep, timeout, Duration};
@@ -235,6 +234,7 @@ fn setup_test_dirs(test_name: &str) -> (PathBuf, PathBuf, PathBuf) {
     fs::create_dir_all(ldk_data_dir.clone()).unwrap();
     fs::create_dir_all(lnd_data_dir.clone()).unwrap();
     fs::create_dir_all(lndk_data_dir.clone()).unwrap();
+    println!("Test dirs created, lnd_data_dir: {:?}", lnd_data_dir);
 
     (ldk_data_dir, lnd_data_dir, lndk_data_dir)
 }
@@ -318,6 +318,15 @@ impl LndNode {
         let lnd_port = corepc_node::get_available_port().unwrap();
         let lnd_addr = format!("localhost:{}", lnd_port);
         let cookie_values = connect_params.unwrap();
+        println!("LND Cert Path: {}", cert_path);
+        println!("LND Macaroon Path: {}", macaroon_path);
+        println!("LND RPC Address: {}", rpc_addr);
+        println!("--- Command ---");
+        println!(
+            "grpcurl -cacert {} -H \"macaroon: $(xxd -ps -u -c 1000 {})\" {} lnrpc.Lightning/GetInfo -proto lightning.proto",
+            cert_path, macaroon_path, rpc_addr
+        );
+        println!("--- Command ---");
         let args = [
             format!("--listen={}", lnd_addr),
             format!("--rpclisten={}", rpc_addr),
@@ -334,6 +343,7 @@ impl LndNode {
             format!("--debuglevel=info,PEER=info,RPCS=info,RPCP=info"),
             format!("--bitcoind.rpcuser={}", cookie_values.user),
             format!("--bitcoind.rpcpass={}", cookie_values.password),
+            format!("--profile=9736"),
             format!(
                 "--bitcoind.zmqpubrawblock=tcp://127.0.0.1:{}",
                 zmq_block_port
@@ -372,10 +382,18 @@ impl LndNode {
     async fn setup_client(&mut self) {
         // We need to give lnd some time to start up before we'll be able to interact with it via
         // the client.
+        println!("LndNode::setup_client: Giving LND 10 seconds to start up fully...");
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        println!("LndNode::setup_client: Initial delay complete, attempting to connect");
+
         let mut retry = false;
         let mut retry_num = 0;
         while retry_num == 0 || retry {
-            thread::sleep(Duration::from_secs(3));
+            println!(
+                "LndNode::setup_client: Connecting to LND at {}, attempt #{}",
+                self.address, retry_num
+            );
+            tokio::time::sleep(Duration::from_secs(3)).await;
 
             let client_result = tonic_lnd::connect(
                 self.address.clone(),
@@ -386,6 +404,7 @@ impl LndNode {
 
             match client_result {
                 Ok(client) => {
+                    println!("LndNode::setup_client: Successfully connected to LND");
                     self.client = Some(client);
 
                     retry = false;
@@ -393,7 +412,7 @@ impl LndNode {
                 }
                 Err(err) => {
                     println!(
-                        "getting client error {err}, retrying call {} time",
+                        "LndNode::setup_client: Connection error {err}, retrying call {} time",
                         retry_num
                     );
                     if retry_num == 6 {
@@ -526,6 +545,10 @@ impl LndNode {
     pub async fn check_chain_sync(&mut self) {
         loop {
             let resp = self.get_info().await;
+            println!(
+                "LND getinfo: {}, {}, {}",
+                resp.synced_to_chain, resp.num_peers, resp.block_height
+            );
             if resp.synced_to_chain {
                 return;
             }

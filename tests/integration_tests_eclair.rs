@@ -1,10 +1,9 @@
-#![cfg(eclair_test)]
+// #![cfg(eclair_test)]
 
 mod common;
 
 use bitcoin::secp256k1::PublicKey;
 use bitcoin::Network;
-use bitcoincore_rpc::RpcApi;
 use reqwest::Client as ReqwestClient;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -148,7 +147,17 @@ async fn test_lndk_pay_eclair_offer() {
     let test_name = "lndk_pay_eclair_offer";
     let (bitcoind, mut lnd, ldk1, _, lndk_dir) = common::setup_test_infrastructure(test_name).await;
 
-    bitcoind.node.client.add_node("127.0.0.1:18444").unwrap();
+    bitcoind
+        .node
+        .client
+        .call::<()>(
+            "addnode",
+            &[
+                serde_json::to_value("127.0.0.1:18444").unwrap(),
+                serde_json::to_value("add").unwrap(),
+            ],
+        )
+        .unwrap();
     // --- Eclair Setup ---
     let eclair_api = EclairApi::new();
 
@@ -180,7 +189,7 @@ async fn test_lndk_pay_eclair_offer() {
     // Fund nodes
     let ldk1_fund_addr = ldk1.bitcoind_client.get_new_address().await;
     let ldk1_addr_str = ldk1_fund_addr.to_string();
-    let ldk1_addr_rpc = bitcoind::bitcoincore_rpc::bitcoin::Address::from_str(&ldk1_addr_str)
+    let ldk1_addr_rpc = bitcoincore_rpc::bitcoin::Address::from_str(&ldk1_addr_str)
         .unwrap()
         .require_network(bitcoincore_rpc::bitcoin::Network::Regtest)
         .unwrap();
@@ -230,10 +239,10 @@ async fn test_lndk_pay_eclair_offer() {
     bitcoind
         .node
         .client
-        .generate_to_address(75, &ldk1_addr_rpc)
+        .generate_to_address(50, &ldk1_addr_rpc)
         .unwrap();
 
-    println!("Mined 75 blocks");
+    println!("Mined 50 blocks");
 
     lnd.wait_for_chain_sync().await;
 

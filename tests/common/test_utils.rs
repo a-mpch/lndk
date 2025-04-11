@@ -18,25 +18,38 @@ where
     let mut retry_num = 0;
     let resp = Err(());
     while retry_num < 3 {
+        // println!(
+        // "retry_async: Attempting {} call, retry #{}",
+        // func_name,
+        // retry_num
+        // );
         sleep(Duration::from_secs(3)).await;
+        // println!("retry_async: After sleep, before timeout");
 
-        match timeout(Duration::from_secs(10), f()).await {
+        match timeout(Duration::from_secs(60), f()).await {
             Ok(call_result) => match call_result {
                 Err(e) => {
-                    println!("error: {:?}", e);
-                    println!("retrying {} call", func_name.clone());
+                    println!("retry_async: error from {}: {:?}", func_name.clone(), e);
+                    println!("retry_async: retrying {} call", func_name.clone());
                 }
-                Ok(resp) => return Ok(resp.into_inner()),
+                Ok(resp) => {
+                    println!("retry_async: {} call succeeded", func_name.clone());
+                    return Ok(resp.into_inner());
+                }
             },
             Err(_) => {
-                println!("timeout after 5 seconds for {} call", func_name.clone());
-                println!("retrying {} call", func_name.clone());
+                println!(
+                    "retry_async: timeout after 60 seconds for {} call",
+                    func_name.clone()
+                );
+                // println!("retry_async: retrying {} call", func_name.clone());
             }
         }
 
         retry_num += 1;
         if retry_num == 5 {
-            panic!("{} call failed after 3 retries", func_name);
+            println!("retry_async: {} call failed after 5 retries", func_name);
+            panic!("{} call failed after 5 retries", func_name);
         }
     }
     resp

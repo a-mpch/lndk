@@ -1,14 +1,22 @@
-{ inputs, self, ... }:
+{
+  inputs,
+  self,
+  crane,
+  ...
+}:
 {
   perSystem =
     { pkgs, config, ... }:
     let
+      rustToolchainFile = builtins.fromTOML (builtins.readFile ../../rust-toolchain.toml);
+      rustChannel = rustToolchainFile.toolchain.channel;
+      craneLib = (crane.mkLib pkgs).overrideToolchain (pkgs.rust-bin.stable.${rustChannel}.default);
       advisory-db = inputs.advisory-db;
     in
     {
       checks = {
         lndk = config.packages.rust;
-        cargo-audit = pkgs.craneLib.cargoAudit {
+        cargo-audit = craneLib.cargoAudit {
           src = ../../.;
           inherit advisory-db;
         };

@@ -1,9 +1,16 @@
-{ pkgs, inputs, ... }:
+{
+  pkgs,
+  inputs,
+  crane,
+  ...
+}:
 
 let
   inherit (pkgs) lib stdenv;
   src = ../../.;
-
+  rustToolchainFile = builtins.fromTOML (builtins.readFile ../../rust-toolchain.toml);
+  rustChannel = rustToolchainFile.toolchain.channel;
+  craneLib = (crane.mkLib pkgs).overrideToolchain (pkgs.rust-bin.stable.${rustChannel}.default);
   commonDeps = {
     nativeBuildInputs = with pkgs; [
       pkg-config
@@ -15,7 +22,7 @@ let
     ];
   };
 
-  cargoArtifacts = pkgs.craneLib.buildDepsOnly {
+  cargoArtifacts = craneLib.buildDepsOnly {
     inherit src;
     pname = "lndk-deps";
     inherit (commonDeps) nativeBuildInputs buildInputs;
@@ -33,39 +40,14 @@ let
     };
   };
 
-  lndkPkg = pkgs.craneLib.buildPackage (
+  lndkPkg = craneLib.buildPackage (
     basePkg
     // {
       pname = "lndk";
     }
   );
 
-  lndkITestPkg = pkgs.craneLib.buildPackage (
-    basePkg
-    // {
-      pname = "lndk-itest";
-      cargoExtraArgs = "--features itest";
-      RUSTFLAGS = "--cfg itest";
-    }
-  );
 in
 {
   rust = lndkPkg;
-
-  lndk-itest-env = pkgs.buildEnv {
-    name = "lndk-itest-env";
-
-    paths = [
-      lndkITestPkg
-      pkgs.go
-      pkgs.git
-    ];
-
-    meta = with lib; {
-      description = "Complete environment for running LNDK integration tests";
-      homepage = "https://github.com/lndk-org/lndk";
-      license = licenses.mit;
-      platforms = platforms.linux ++ platforms.darwin;
-    };
-  };
 }

@@ -14,6 +14,11 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -21,38 +26,45 @@
       self,
       nixpkgs,
       flake-parts,
+      rust-overlay,
+      crane,
       ...
     }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
-      systems = nixpkgs.lib.systems.flakeExposed;
-      imports = [
-        inputs.treefmt-nix.flakeModule
-        ./nix/pkgs/flake-module.nix
-        ./nix/checks/flake-module.nix
-        ./nix/shells.nix
-        ./nix/treefmt.nix
-      ];
-      perSystem =
-        {
-          config,
-          pkgs,
-          self',
-          system,
-          ...
-        }:
-        {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            overlays = [ (final: prev: { craneLib = (inputs.crane.mkLib pkgs); }) ];
-          };
-          apps = {
-            lndk = {
-              program = "${self'.packages.lndk}/bin/lndk";
+    flake-parts.lib.mkFlake
+      {
+        inherit inputs;
+        specialArgs = { inherit crane; };
+      }
+      {
+        systems = nixpkgs.lib.systems.flakeExposed;
+        imports = [
+          inputs.treefmt-nix.flakeModule
+          ./nix/pkgs/flake-module.nix
+          ./nix/checks/flake-module.nix
+          ./nix/shells.nix
+          ./nix/treefmt.nix
+        ];
+        perSystem =
+          {
+            config,
+            pkgs,
+            self',
+            system,
+            ...
+          }:
+          {
+            _module.args.pkgs = import inputs.nixpkgs {
+              inherit system;
+              overlays = [ (import rust-overlay) ];
             };
-            lndk-cli = {
-              program = "${self'.packages.lndk}/bin/lndk-cli";
+            apps = {
+              lndk = {
+                program = "${self'.packages.lndk}/bin/lndk";
+              };
+              lndk-cli = {
+                program = "${self'.packages.lndk}/bin/lndk-cli";
+              };
             };
           };
-        };
-    };
+      };
 }

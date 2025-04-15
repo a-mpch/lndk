@@ -130,8 +130,7 @@ To use LNDK on Nix you first need to install [Nix](https://nixos.org/download/).
 
 Then you have few options to run or develop LNDK:
 
-`nix develop` will open a shell with all the dependencies needed to run LNDK.
-`nix develop .#lndk-itest` will open a shell with all the dependencies needed to run LNDK and LNDK integration tests.
+`nix develop` will open a shell with all the dependencies needed to run LNDK and itests.
 `nix flake check` will run all the checks defined in the flake. Also runs cargo audit and formatting checks.
 
 
@@ -140,11 +139,8 @@ Then you have few options to run or develop LNDK:
 Integration tests require building an LND binary. You can use Nix to provide a complete environment with all dependencies needed for the tests:
 
 ```
-# Install the integration test environment (includes Go and git)
-nix shell .#lndk-itest-env
-
-# Run the integration tests from within the git repository
-run-lndk-itest
+nix develop
+make itest
 ```
 
 The integration tests must be run from within the Git repository. The script will handle building LND from source and running the tests with the correct environment variables.

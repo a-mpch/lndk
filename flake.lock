@@ -102,7 +102,28 @@
         "crane": "crane",
         "flake-parts": "flake-parts",
         "nixpkgs": "nixpkgs",
+        "rust-overlay": "rust-overlay",
         "treefmt-nix": "treefmt-nix"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1744684506,
+        "narHash": "sha256-pDPDMT1rdkTWi8MIoZ67gT3L817R7P0Jo+PP+BrnyJI=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "47beae969336c05e892e1e4a9dbaac9593de34ab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
       }
     },
     "treefmt-nix": {

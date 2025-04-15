@@ -37,8 +37,15 @@ let
     basePkg
     // {
       pname = "lndk";
+    }
+  );
 
-      cargoTestExtraArgs = "--lib --bins";
+  lndkITestPkg = pkgs.craneLib.buildPackage (
+    basePkg
+    // {
+      pname = "lndk-itest";
+      cargoExtraArgs = "--features itest";
+      RUSTFLAGS = "--cfg itest";
     }
   );
 in
@@ -49,7 +56,7 @@ in
     name = "lndk-itest-env";
 
     paths = [
-      lndkPkg
+      lndkITestPkg
       pkgs.go
       pkgs.git
     ];

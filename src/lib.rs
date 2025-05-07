@@ -300,10 +300,17 @@ pub struct PayOfferParams {
 }
 
 impl OfferHandler {
-    pub fn new(response_invoice_timeout: Option<u32>) -> Self {
+    pub fn new(
+        response_invoice_timeout: Option<u32>,
+        seed_for_key_expansion: Option<[u8; 32]>,
+    ) -> Self {
         let messenger_utils = MessengerUtilities::new();
-        let random_bytes = messenger_utils.get_secure_random_bytes();
-        let expanded_key = ExpandedKey::new(&KeyMaterial(random_bytes));
+        let seed_or_random_bytes = if let Some(seed) = seed_for_key_expansion {
+            seed
+        } else {
+            messenger_utils.get_secure_random_bytes()
+        };
+        let expanded_key = ExpandedKey::new(&KeyMaterial(seed_or_random_bytes));
         let response_invoice_timeout =
             response_invoice_timeout.unwrap_or(DEFAULT_RESPONSE_INVOICE_TIMEOUT);
 
@@ -461,7 +468,7 @@ impl OfferHandler {
 
 impl Default for OfferHandler {
     fn default() -> Self {
-        Self::new(None)
+        Self::new(None, None)
     }
 }
 

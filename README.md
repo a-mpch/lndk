@@ -122,6 +122,19 @@ Rather than use the admin.macaroon with unrestricted permission to an `LND` node
 lncli bakemacaroon --save_to=<FILEPATH>/lndk.macaroon uri:/lnrpc.Lightning/GetInfo uri:/lnrpc.Lightning/ListPeers uri:/lnrpc.Lightning/SubscribePeerEvents uri:/lnrpc.Lightning/SendCustomMessage uri:/lnrpc.Lightning/SubscribeCustomMessages uri:/peersrpc.Peers/UpdateNodeAnnouncement uri:/signrpc.Signer/DeriveSharedKey uri:/verrpc.Versioner/GetVersion
 ```
 
+### Seeding LNDK
+
+Invoice requests require an usage of a secret key for encryption of metadata fields to then verify that the invoice was requested from the node.
+This makes LNDK resistant to verify invoice request responses across restarts.
+
+*Warning:* In production settings this secret must be handled as any other private key.
+
+Secret must be a randomly generated 32 bytes hex and needs to be used in config file or lndk parameters:
+```bash
+openssl rand -hex 32
+```
+Then, `offer_metadata_seed=<bytes>` at `lndk.conf`
+
 ### Using Nix
 
 Nix is a package manager for Unix systems that makes package management reliable and reproducible.

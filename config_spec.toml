@@ -88,3 +88,9 @@ name = "rate_limit_period_secs"
 type = "u64"
 default = "1"
 doc = "The duration of the rate limit period in seconds. This value specifies the time window over which the rate limit count is applied."
+
+[[param]]
+name = "offer_metadata_seed"
+type = "String"
+optional = true
+doc = "32 bytes length hex encoded secret seed to generate key for offer generation && offer verifications"

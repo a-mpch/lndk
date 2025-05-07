@@ -99,7 +99,14 @@ async fn main() -> Result<(), ()> {
         }
     }
 
-    let handler = Arc::new(OfferHandler::new(config.response_invoice_timeout));
+    let seed_for_key_expansion =
+        get_seed_for_key_expansion(config.offer_metadata_seed).map_err(|err| {
+            error!("Error getting offer generation seed: {}", err);
+        })?;
+    let handler = Arc::new(OfferHandler::new(
+        config.response_invoice_timeout,
+        seed_for_key_expansion,
+    ));
     let messenger = LndkOnionMessenger::new();
 
     let mut client = get_lnd_client(args.lnd.clone()).expect("failed to connect to lnd");
@@ -190,4 +197,48 @@ fn get_conf_file_paths() -> Vec<OsString> {
 
     let paths = vec![current_dir_conf_file, default_lndk_config_path];
     paths
+}
+
+#[derive(Debug)]
+pub enum SeedError {
+    /// Seed hex string could not be decoded
+    HexDecodeError(hex::FromHexError),
+    /// The seed length is not 32
+    InvalidLength(usize),
+    /// Failed to convert the decoded bytest to a fixed-size array
+    ConversionError,
+}
+
+impl std::fmt::Display for SeedError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::HexDecodeError(e) => write!(f, "Failed to decode hex string: {}", e),
+            Self::InvalidLength(len) => {
+                write!(f, "Invalid seed length: {} bytes (expected 32)", len)
+            }
+            Self::ConversionError => write!(f, "Failed to convert bytes to array"),
+        }
+    }
+}
+
+impl std::error::Error for SeedError {}
+
+fn get_seed_for_key_expansion(seed_hex_str: Option<String>) -> Result<Option<[u8; 32]>, SeedError> {
+    if let Some(seed_hex_str) = seed_hex_str {
+        match hex::decode(seed_hex_str) {
+            Ok(decoded_bytes) => {
+                if decoded_bytes.len() == 32 {
+                    decoded_bytes
+                        .try_into()
+                        .map(Some)
+                        .map_err(|_| SeedError::ConversionError)
+                } else {
+                    Err(SeedError::InvalidLength(decoded_bytes.len()))
+                }
+            }
+            Err(e) => Err(SeedError::HexDecodeError(e)),
+        }
+    } else {
+        Ok(None)
+    }
 }

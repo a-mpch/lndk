@@ -96,12 +96,20 @@ impl NodeIdLookUp for LndkNodeIdLookUp {
 /// implementations for LDK’s OnionMessenger.
 pub struct MessengerUtilities {
     entropy_source: RandomBytes,
+    seed: [u8; 32],
+}
+
+impl Clone for MessengerUtilities {
+    fn clone(&self) -> Self {
+        Self::new(self.seed)
+    }
 }
 
 impl MessengerUtilities {
     pub fn new(seed: [u8; 32]) -> Self {
         MessengerUtilities {
             entropy_source: RandomBytes::new(seed),
+            seed,
         }
     }
 }

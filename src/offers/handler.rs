@@ -7,7 +7,7 @@ use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::inbound_payment::ExpandedKey;
 use lightning::offers::invoice::Bolt12Invoice;
 use lightning::offers::invoice_error::InvoiceError;
-use lightning::offers::offer::Offer;
+use lightning::offers::offer::{Offer, Quantity};
 use lightning::onion_message::messenger::{
     Destination, MessageSendInstructions, Responder, ResponseInstruction,
 };
@@ -22,7 +22,7 @@ use tokio::time::{sleep, timeout};
 use tonic_lnd::lnrpc::{ChanInfoRequest, Payment};
 use tonic_lnd::Client;
 
-use super::requests::{create_invoice_request, send_invoice_request};
+use super::requests::{create_invoice_request, create_offer, send_invoice_request};
 use super::OfferError;
 use crate::offers::requests::{send_payment, track_payment};
 use crate::onion_messenger::MessengerUtilities;
@@ -78,6 +78,25 @@ pub struct SendPaymentParams {
     pub payment_hash: [u8; 32],
     pub msats: u64,
     pub payment_id: PaymentId,
+}
+
+pub struct CreateOfferParams {
+    /// LND tonic client used to query information from the node.
+    pub client: Client,
+    /// The amount of the offer in millisatoshis.
+    pub amount_msats: u64,
+    /// The chain the offer is valid on.
+    pub chain: Network,
+    /// Optional description of the offer. If not provided, the offer will have description "".
+    pub description: Option<String>,
+    /// Optional issuer of the offer. If not provided, the offer will have issuer None.
+    pub issuer: Option<String>,
+    /// Optional quantity of the offer. If not provided, the offer will have quantity
+    /// Quantity::One.
+    pub quantity: Option<Quantity>,
+    /// Optional relative expiry of the offer since creation.
+    /// If not provided, the offer will have expiry None, will never expire.
+    pub expiry: Option<Duration>,
 }
 
 impl OfferHandler {
@@ -282,6 +301,21 @@ impl OfferHandler {
     pub(crate) fn remove_active_payment(&self, payment_id: PaymentId) {
         let mut active_payments = self.active_payments.lock().unwrap();
         active_payments.remove(&payment_id);
+    }
+
+    pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, OfferError> {
+        create_offer(
+            params.client.clone(),
+            params.amount_msats,
+            params.chain,
+            params.description,
+            params.issuer,
+            params.quantity,
+            params.expiry,
+            &self.messenger_utils,
+            &self.expanded_key,
+        )
+        .await
     }
 }
 

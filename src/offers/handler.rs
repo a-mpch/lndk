@@ -7,6 +7,7 @@ use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::inbound_payment::ExpandedKey;
 use lightning::offers::invoice::Bolt12Invoice;
 use lightning::offers::invoice_error::InvoiceError;
+use lightning::offers::invoice_request::InvoiceRequest;
 use lightning::offers::offer::{Offer, Quantity};
 use lightning::onion_message::messenger::{
     Destination, MessageSendInstructions, Responder, ResponseInstruction,
@@ -22,7 +23,10 @@ use tokio::time::{sleep, timeout};
 use tonic_lnd::lnrpc::{ChanInfoRequest, Payment};
 use tonic_lnd::Client;
 
-use super::requests::{create_invoice_request, create_offer, send_invoice_request};
+use super::requests::{
+    create_invoice_info_from_request, create_invoice_request, create_offer, send_invoice_request,
+    LndkBolt12InvoiceInfo,
+};
 use super::OfferError;
 use crate::offers::requests::{send_payment, track_payment};
 use crate::onion_messenger::MessengerUtilities;
@@ -316,6 +320,14 @@ impl OfferHandler {
             &self.expanded_key,
         )
         .await
+    }
+
+    pub async fn create_invoice(
+        &self,
+        client: Client,
+        invoice_request: InvoiceRequest,
+    ) -> Result<LndkBolt12InvoiceInfo, OfferError> {
+        create_invoice_info_from_request(client, invoice_request).await
     }
 }
 

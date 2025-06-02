@@ -51,6 +51,12 @@ pub enum OfferError {
     GetChannelInfo(Status),
     /// Failed to create offer.
     CreateOfferFailure(Bolt12SemanticError),
+    /// Failed to add invoice.
+    AddInvoiceFailure(Status),
+    /// Failed to decode payment request.
+    DecodePaymentRequestFailure(Status),
+    /// Failed to parse payment hash.
+    ParsePaymentHashFailure(String),
 }
 
 impl Display for OfferError {
@@ -81,6 +87,15 @@ impl Display for OfferError {
             OfferError::IntroductionNodeNotFound => write!(f, "Could not find introduction node."),
             OfferError::GetChannelInfo(e) => write!(f, "Could not fetch channel info: {e:?}"),
             OfferError::CreateOfferFailure(e) => write!(f, "Could not create offer: {e:?}"),
+            OfferError::AddInvoiceFailure(e) => {
+                write!(f, "Could not add invoice to lnd node: {e:?}")
+            }
+            OfferError::DecodePaymentRequestFailure(e) => {
+                write!(f, "Could not decode payment request: {e:?}")
+            }
+            OfferError::ParsePaymentHashFailure(e) => {
+                write!(f, "Could not parse payment hash: {e:?}")
+            }
         }
     }
 }

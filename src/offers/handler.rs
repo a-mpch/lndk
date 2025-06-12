@@ -1,15 +1,14 @@
 use bitcoin::key::Secp256k1;
 use bitcoin::Network;
 use futures::executor::block_on;
-use lightning::blinded_path::message::{BlindedMessagePath, MessageContext, OffersContext};
+use lightning::blinded_path::message::{BlindedMessagePath, OffersContext};
 use lightning::blinded_path::payment::BlindedPaymentPath;
 use lightning::blinded_path::{Direction, IntroductionNode};
-use lightning::ln::channelmanager::{PaymentId, Verification};
+use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::inbound_payment::ExpandedKey;
 use lightning::offers::invoice::{Bolt12Invoice, DerivedSigningPubkey, InvoiceBuilder};
 use lightning::offers::invoice_error::InvoiceError;
 use lightning::offers::invoice_request::InvoiceRequest;
-use lightning::offers::nonce::Nonce;
 use lightning::offers::offer::{Offer, Quantity};
 use lightning::onion_message::messenger::{
     Destination, MessageSendInstructions, Responder, ResponseInstruction,
@@ -30,7 +29,7 @@ use super::requests::{
     LndkBolt12InvoiceInfo,
 };
 use super::OfferError;
-use crate::offers::requests::{send_payment, track_payment};
+use crate::offers::requests::{connect_to_path, send_payment, track_payment};
 use crate::onion_messenger::MessengerUtilities;
 
 pub const DEFAULT_RESPONSE_INVOICE_TIMEOUT: u32 = 15;
@@ -418,22 +417,35 @@ impl OffersMessageHandler for OfferHandler {
                     .build_and_sign(secp_ctx)
                     .map_err(InvoiceError::from);
 
+                // To do: this requires changes in rust-lightning on how to access the reply_path from the
+                // onion route.
+                let path = &responder.reply_path;
+
+                // We just unwrap here because we know the client is Some.
+                let client = self.client.clone().unwrap();
+                // We need to connect to the path before sending an invoice or invoice error.
+                // This is not required to do, is to make sure that we can connect to the path.
+                match block_on(connect_to_path(client, path)) {
+                    Ok(invoice) => invoice,
+                    Err(e) => {
+                        error!("Error connecting to path: {e}");
+                        return None;
+                    }
+                };
                 match invoice_result {
                     Ok(invoice) => {
-                        let nonce = Nonce::from_entropy_source(&*self.messenger_utils);
-                        let hmac = invoice_info
-                            .payment_hash
-                            .hmac_for_offer_payment(nonce, &self.expanded_key);
-                        let context = MessageContext::Offers(OffersContext::InboundPayment {
-                            payment_hash: invoice_info.payment_hash,
-                            nonce,
-                            hmac,
-                        });
+                        {
+                            let mut pending_messages = self.pending_messages.lock().unwrap();
+                            pending_messages.push((
+                                OffersMessage::Invoice(invoice),
+                                responder.respond().into_instructions(),
+                            ));
+                            std::mem::drop(pending_messages);
+                        }
                         log::trace!("Responding with invoice");
-                        Some((
-                            OffersMessage::Invoice(invoice),
-                            responder.respond_with_reply_path(context),
-                        ))
+
+                        // We don't use default responder as messages need to be sent through LND.
+                        None
                     }
                     Err(error) => {
                         log::error!("Error building invoice: {:?}", error);

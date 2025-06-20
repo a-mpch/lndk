@@ -34,6 +34,7 @@ use crate::{
         features_support_onion_messages, parse_blinded_paths, Bolt12InvoiceCreator, InvoicePayer,
         OfferCreator, PeerConnector,
     },
+    offers::handler::CreateOfferParams,
     onion_messenger::MessengerUtilities,
 };
 
@@ -121,14 +122,31 @@ pub(super) async fn track_payment(
         .map_err(|_| OfferError::PaymentFailure)
 }
 
-pub(super) async fn create_offer(
-    mut creator: (impl OfferCreator + std::marker::Send + 'static + PeerConnector),
+pub(super) struct CreateOfferArgs {
     amount_msats: u64,
     chain: Network,
     description: Option<String>,
     issuer: Option<String>,
     quantity: Option<Quantity>,
     expiry: Option<Duration>,
+}
+
+impl CreateOfferArgs {
+    pub fn from_params(params: &CreateOfferParams) -> Self {
+        Self {
+            amount_msats: params.amount_msats,
+            chain: params.chain,
+            description: params.description.clone(),
+            issuer: params.issuer.clone(),
+            quantity: params.quantity,
+            expiry: params.expiry,
+        }
+    }
+}
+
+pub(super) async fn create_offer(
+    mut creator: (impl OfferCreator + std::marker::Send + 'static + PeerConnector),
+    args: CreateOfferArgs,
     entropy_source: &MessengerUtilities,
     expanded_key: &ExpandedKey,
 ) -> Result<Offer, OfferError> {
@@ -146,22 +164,22 @@ pub(super) async fn create_offer(
 
     let mut builder =
         OfferBuilder::deriving_signing_pubkey(node_id, expanded_key, nonce, &secp_ctx)
-            .amount_msats(amount_msats)
-            .chain(chain)
+            .amount_msats(args.amount_msats)
+            .chain(args.chain)
             .path(path);
-    builder = match description {
+    builder = match args.description {
         Some(description) => builder.description(description),
         None => builder,
     };
-    builder = match issuer {
+    builder = match args.issuer {
         Some(issuer) => builder.issuer(issuer),
         None => builder,
     };
-    builder = match quantity {
+    builder = match args.quantity {
         Some(quantity) => builder.supported_quantity(quantity),
         None => builder,
     };
-    builder = match expiry {
+    builder = match args.expiry {
         Some(expiry) => {
             let expiry = SystemTime::now() + expiry;
             let absolute_expiry = expiry.duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -1001,18 +1019,15 @@ mod tests {
         let entropy_source = MessengerUtilities::new([42; 32]);
         let expanded_key = ExpandedKey::new([42; 32]);
 
-        let result = create_offer(
-            creator_mock,
-            1000, // amount_msats
-            Network::Regtest,
-            Some("Test offer".to_string()),
-            Some("Test issuer".to_string()),
-            Some(Quantity::One),
-            None, // No expiry
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: Some("Test offer".to_string()),
+            issuer: Some("Test issuer".to_string()),
+            quantity: Some(Quantity::One),
+            expiry: None,
+        };
+        let result = create_offer(creator_mock, args, &entropy_source, &expanded_key).await;
 
         assert!(result.is_ok());
         let offer = result.unwrap();
@@ -1035,18 +1050,15 @@ mod tests {
         let expanded_key = ExpandedKey::new([42; 32]);
 
         // Only provide required parameters
-        let result = create_offer(
-            creator_mock,
-            1000, // amount_msats
-            Network::Regtest,
-            None, // No description
-            None, // No issuer
-            None, // Default quantity
-            None, // No expiry
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: None,
+            expiry: None,
+        };
+        let result = create_offer(creator_mock, args, &entropy_source, &expanded_key).await;
 
         assert!(result.is_ok());
         let offer = result.unwrap();
@@ -1069,18 +1081,15 @@ mod tests {
         let expanded_key = ExpandedKey::new([42; 32]);
 
         // Include expiry parameter
-        let result = create_offer(
-            creator_mock,
-            1000, // amount_msats
-            Network::Regtest,
-            None,
-            None,
-            None,
-            Some(Duration::from_secs(3600)), // 1 hour expiry
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: None,
+            expiry: Some(Duration::from_secs(3600)),
+        };
+        let result = create_offer(creator_mock, args, &entropy_source, &expanded_key).await;
 
         assert!(result.is_ok());
         let offer = result.unwrap();
@@ -1101,18 +1110,15 @@ mod tests {
         let entropy_source = MessengerUtilities::new([42; 32]);
         let expanded_key = ExpandedKey::new([42; 32]);
 
-        let result = create_offer(
-            creator_mock,
-            1000,
-            Network::Regtest,
-            None,
-            None,
-            None,
-            None,
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: None,
+            expiry: None,
+        };
+        let result = create_offer(creator_mock, args, &entropy_source, &expanded_key).await;
 
         assert!(result.is_err());
         assert!(matches!(
@@ -1136,18 +1142,15 @@ mod tests {
         let entropy_source = MessengerUtilities::new([42; 32]);
         let expanded_key = ExpandedKey::new([42; 32]);
 
-        let result = create_offer(
-            creator_mock,
-            1000,
-            Network::Regtest,
-            None,
-            None,
-            None,
-            None,
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: None,
+            expiry: None,
+        };
+        let result = create_offer(creator_mock, args, &entropy_source, &expanded_key).await;
 
         assert!(result.is_err());
         assert!(matches!(
@@ -1164,18 +1167,15 @@ mod tests {
         let expanded_key = ExpandedKey::new([42; 32]);
 
         // Test with different quantity types
-        let result = create_offer(
-            creator_mock,
-            1000,
-            Network::Regtest,
-            None,
-            None,
-            Some(Quantity::Unbounded),
-            None,
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: Some(Quantity::Unbounded),
+            expiry: None,
+        };
+        let result = create_offer(creator_mock, args, &entropy_source, &expanded_key).await;
 
         assert!(result.is_ok());
         let offer = result.unwrap();
@@ -1191,30 +1191,26 @@ mod tests {
         let entropy_source = MessengerUtilities::new([42; 32]);
         let expanded_key = ExpandedKey::new([42; 32]);
 
-        let offer1 = create_offer(
-            creator_mock1,
-            1000,
-            Network::Regtest,
-            None,
-            None,
-            None,
-            None,
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
-        let offer2 = create_offer(
-            creator_mock2,
-            1000,
-            Network::Regtest,
-            None,
-            None,
-            None,
-            None,
-            &entropy_source,
-            &expanded_key,
-        )
-        .await;
+        let args = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: None,
+            expiry: None,
+        };
+
+        let args2 = CreateOfferArgs {
+            amount_msats: 1000,
+            chain: Network::Regtest,
+            description: None,
+            issuer: None,
+            quantity: None,
+            expiry: None,
+        };
+
+        let offer1 = create_offer(creator_mock1, args, &entropy_source, &expanded_key).await;
+        let offer2 = create_offer(creator_mock2, args2, &entropy_source, &expanded_key).await;
 
         assert!(offer1.is_ok());
         assert!(offer2.is_ok());

@@ -29,7 +29,7 @@ use super::requests::{
     LndkBolt12InvoiceInfo,
 };
 use super::OfferError;
-use crate::offers::requests::{connect_to_path, send_payment, track_payment};
+use crate::offers::requests::{connect_to_path, send_payment, track_payment, CreateOfferArgs};
 use crate::onion_messenger::MessengerUtilities;
 
 pub const DEFAULT_RESPONSE_INVOICE_TIMEOUT: u32 = 15;
@@ -315,14 +315,10 @@ impl OfferHandler {
     }
 
     pub async fn create_offer(&self, params: CreateOfferParams) -> Result<Offer, OfferError> {
+        let args = CreateOfferArgs::from_params(&params);
         create_offer(
             params.client.clone(),
-            params.amount_msats,
-            params.chain,
-            params.description,
-            params.issuer,
-            params.quantity,
-            params.expiry,
+            args,
             &self.messenger_utils,
             &self.expanded_key,
         )

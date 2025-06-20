@@ -51,6 +51,94 @@ jobs:
         run: cargo test --bin lndk-cli
       - name: run integration tests
         run: make itest
+      - name: collect logs on failure
+        if: failure()
+        run: |
+          echo "Integration tests failed, collecting logs..."
+          echo "=== SEARCHING FOR FAILED TESTS AND LOGS ==="
+
+          # Look for the most recent test run logs
+          TEST_DIRS=$(find /tmp/lndk-tests -type d -name "test-*" 2>/dev/null | sort -r | head -10)
+
+          if [ -n "$TEST_DIRS" ]; then
+            echo "Found test directories:"
+            echo "$TEST_DIRS"
+            echo ""
+            
+            # For each test directory, look for logs
+            for test_dir in $TEST_DIRS; do
+              test_name=$(basename "$test_dir" | sed 's/^test-//' | sed 's/-[0-9][0-9]-[0-9][0-9]-[0-9][0-9][0-9][0-9]-[0-9][0-9][0-9][0-9]$//')
+              echo "=== LOGS FOR TEST: $test_name ==="
+              echo "Test directory: $test_dir"
+              
+              LND_DATA_DIR="$test_dir/lnd-data"
+              LNDK_DATA_DIR="$test_dir/lndk-data"
+              LDK_LOG_DIR="$test_dir/ldk-data/ldk-logs"
+              
+              # Print LND stdout logs
+              if [ -f "$LND_DATA_DIR/lnd-itest-stdout.log" ]; then
+                echo ""
+                echo "--- LND STDOUT LOGS (last 100 lines) ---"
+                tail -100 "$LND_DATA_DIR/lnd-itest-stdout.log"
+              fi
+              
+              # Print LND stderr logs
+              if [ -f "$LND_DATA_DIR/lnd-itest-stderr.log" ]; then
+                echo ""
+                echo "--- LND STDERR LOGS (last 100 lines) ---"
+                tail -100 "$LND_DATA_DIR/lnd-itest-stderr.log"
+              fi
+              
+              # Print other LND logs
+              if ls "$LND_DATA_DIR"/lnd-logs/lnd*.log 2>/dev/null >&2; then
+                echo ""
+                echo "--- OTHER LND LOGS ---"
+                for log_file in "$LND_DATA_DIR"/lnd-logs/lnd*.log; do
+                  if [ -f "$log_file" ]; then
+                    echo "=== $(basename "$log_file") (last 50 lines) ==="
+                    tail -50 "$log_file"
+                    echo ""
+                  fi
+                done
+              fi
+              
+              # Print LNDK logs
+              if [ -f "$LNDK_DATA_DIR/lndk-logs.txt" ]; then
+                echo ""
+                echo "--- LNDK LOGS (last 100 lines) ---"
+                tail -100 "$LNDK_DATA_DIR/lndk-logs.txt"
+              fi
+
+              # Print LDK logs
+              if [ -f "$LDK_LOG_DIR/logs-ldk1.txt" ]; then
+                echo ""
+                echo "--- LDK 1 LOGS (last 100 lines) ---"
+                tail -100 "$LDK_LOG_DIR/logs-ldk1.txt"
+              fi
+
+              if [ -f "$LDK_LOG_DIR/logs-ldk2.txt" ]; then
+                echo ""
+                echo "--- LDK 2 LOGS (last 100 lines) ---"
+                tail -100 "$LDK_LOG_DIR/logs-ldk2.txt"
+              fi
+              
+              echo ""
+              echo "=================================================="
+              echo ""
+            done
+          else
+            echo "No test directories found in /tmp/lndk-tests"
+            echo "Listing /tmp contents:"
+            ls -la /tmp/ | grep -E "(lndk|test)" || echo "No lndk/test related files found"
+          fi
+
+          # Also try to find any recent cargo test output
+          echo ""
+          echo "=== SEARCHING FOR RECENT TEST OUTPUT ==="
+          if [ -f "$GITHUB_WORKSPACE/test_output.log" ]; then
+            echo "Found test output log:"
+            tail -200 "$GITHUB_WORKSPACE/test_output.log"
+          fi
 
   coverage:
     name: LNDK Code Coverage

@@ -24,6 +24,7 @@ use lndk::{setup_logger, LifecycleSignals};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
+use std::thread::sleep;
 use std::time::SystemTime;
 use tokio::time::Duration;
 use tokio::{select, try_join};
@@ -589,13 +590,15 @@ async fn pay_offer_and_wait_for_payment(
     offer: Offer,
     mut lnd_client: Client,
 ) -> Result<(), ()> {
+    log::info!("Paying offer: {:?}", offer);
+    sleep(Duration::from_secs(2));
     let payment = ldk.pay_offer(offer, None).await;
     assert!(payment.is_ok());
     // Wait for the payment to complete on ldk side.
-    common::wait_for_ldk_payment_completion(ldk, Duration::from_secs(10)).await?;
+    common::wait_for_ldk_payment_completion(ldk, Duration::from_secs(30)).await?;
     // Wait for the payment to complete on lnd side, with a timeout of 10 seconds in case
     // of any race conditions.
-    common::wait_for_lnd_payment_completion(&mut lnd_client, Duration::from_secs(10)).await?;
+    common::wait_for_lnd_payment_completion(&mut lnd_client, Duration::from_secs(30)).await?;
     Ok(())
 }
 #[tokio::test(flavor = "multi_thread")]

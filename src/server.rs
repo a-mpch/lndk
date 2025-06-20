@@ -303,7 +303,7 @@ impl Offers for LNDKServer {
         let network = get_network(info)
             .await
             .map_err(|e| Status::internal(format!("{e:?}")))?;
-        let quantity = parse_quantity(inner_request.quantity.clone())
+        let quantity = parse_quantity(inner_request.quantity)
             .map_err(|_| Status::invalid_argument("Invalid quantity provided"))?;
 
         let request = CreateOfferParams {
@@ -313,7 +313,7 @@ impl Offers for LNDKServer {
             description: inner_request.description.clone(),
             issuer: inner_request.issuer.clone(),
             quantity,
-            expiry: inner_request.expiry.map(|e| Duration::from_secs(e)),
+            expiry: inner_request.expiry.map(Duration::from_secs),
         };
         let offer = match self.offer_handler.create_offer(request).await {
             Ok(offer) => offer,

@@ -224,8 +224,9 @@ impl Bolt12InvoiceCreator for Client {
         let req = Invoice {
             memo: description,
             value_msat: amount,
-            // We use a 24 hour expiry invoices so blinded path restrictions have a higher CLTV expiry.
-            // This is a workaround for LDK default nodes that add a cltv offet for privacy reasons.
+            // We use a 24 hour expiry invoices so blinded path restrictions have a higher CLTV
+            // expiry. This is a workaround for LDK default nodes that add a cltv offet
+            // for privacy reasons.
             expiry: 60 * 60 * 24,
             is_blinded: true,
             ..Default::default()

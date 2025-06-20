@@ -408,13 +408,14 @@ impl OffersMessageHandler for OfferHandler {
                     }
                 };
 
-                // Lnd doesn't support MPP in blinded paths, so we need to build the invoice without it.
+                // Lnd doesn't support MPP in blinded paths, so we need to build the invoice without
+                // it.
                 let invoice_result = invoice_builder
                     .build_and_sign(secp_ctx)
                     .map_err(InvoiceError::from);
 
-                // To do: this requires changes in rust-lightning on how to access the reply_path from the
-                // onion route.
+                // To do: this requires changes in rust-lightning on how to access the reply_path
+                // from the onion route.
                 let path = &responder.reply_path;
 
                 // We just unwrap here because we know the client is Some.

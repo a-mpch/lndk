@@ -6,7 +6,7 @@ use lightning::blinded_path::payment::BlindedPaymentPath;
 use lightning::blinded_path::{Direction, IntroductionNode};
 use lightning::ln::channelmanager::PaymentId;
 use lightning::ln::inbound_payment::ExpandedKey;
-use lightning::offers::invoice::{Bolt12Invoice, DerivedSigningPubkey, InvoiceBuilder};
+use lightning::offers::invoice::Bolt12Invoice;
 use lightning::offers::invoice_error::InvoiceError;
 use lightning::offers::invoice_request::InvoiceRequest;
 use lightning::offers::offer::{Offer, Quantity};
@@ -413,7 +413,7 @@ impl OffersMessageHandler for OfferHandler {
                 };
 
                 // Lnd doesn't support MPP in blinded paths, so we need to build the invoice without it.
-                let invoice_result = InvoiceBuilder::<DerivedSigningPubkey>::from(invoice_builder)
+                let invoice_result = invoice_builder
                     .build_and_sign(secp_ctx)
                     .map_err(InvoiceError::from);
 
@@ -449,10 +449,7 @@ impl OffersMessageHandler for OfferHandler {
                     }
                     Err(error) => {
                         log::error!("Error building invoice: {:?}", error);
-                        Some((
-                            OffersMessage::InvoiceError(error.into()),
-                            responder.respond(),
-                        ))
+                        Some((OffersMessage::InvoiceError(error), responder.respond()))
                     }
                 }
             }

@@ -440,7 +440,7 @@ pub fn parse_blinded_paths(
         .collect()
 }
 
-fn parse_blinded_hops(blinded_hops: &Vec<tonic_lnd::lnrpc::BlindedHop>) -> Vec<BlindedHop> {
+fn parse_blinded_hops(blinded_hops: &[tonic_lnd::lnrpc::BlindedHop]) -> Vec<BlindedHop> {
     blinded_hops
         .iter()
         .map(|hop| {

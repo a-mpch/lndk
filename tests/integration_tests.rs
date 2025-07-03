@@ -140,7 +140,7 @@ async fn pay_offers(handler: Arc<OfferHandler>, pay_cfgs: &Vec<PayOfferParams>) 
 // invoice_request, sends it, and receives an invoice back.
 async fn test_lndk_get_invoice() {
     let test_name = "lndk_get_invoice";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
     let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
     setup_logger(None, log_file).unwrap();
@@ -328,7 +328,7 @@ async fn test_lndk_get_invoice() {
 // Here we test that we're able to fully pay an offer.
 async fn test_lndk_pay_offer() {
     let test_name = "lndk_pay_offer";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (ldk1_pubkey, ldk2_pubkey, _) =
@@ -381,7 +381,7 @@ async fn test_lndk_pay_offer() {
 // Here we test that we're able to pay the same offer multiple times concurrently.
 async fn test_lndk_pay_offer_concurrently() {
     let test_name = "lndk_pay_offer_concurrently";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (ldk1_pubkey, ldk2_pubkey, _) =
@@ -435,7 +435,7 @@ async fn test_lndk_pay_offer_concurrently() {
 // Here we test that we're able to pay multiple offers at the same time.
 async fn test_lndk_pay_multiple_offers_concurrently() {
     let test_name = "lndk_pay_multiple_offers_concurrently";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (ldk1_pubkey, ldk2_pubkey, lnd_pubkey) =
@@ -475,7 +475,7 @@ async fn test_lndk_pay_multiple_offers_concurrently() {
 // is only connected by private channels.
 async fn test_reply_path_unannounced_peers() {
     let test_name = "unannounced_peers";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (_, _, lnd_pubkey) =
@@ -517,7 +517,7 @@ async fn test_reply_path_unannounced_peers() {
 // public channels.
 async fn test_reply_path_announced_peers() {
     let test_name = "announced_peers";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (_, ldk2_pubkey, lnd_pubkey) =
@@ -562,7 +562,7 @@ async fn test_reply_path_announced_peers() {
 // Here we test that we're able to fully pay an offer.
 async fn test_check_lndk_pay_offer_with_reconnection() {
     let test_name = "lndk_pay_offer_with_reconnection";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (ldk1_pubkey, ldk2_pubkey, _) =
@@ -663,7 +663,7 @@ async fn check_pay_offer_with_reconnection(
 // Test that we can create an offer and that the offer is valid.
 async fn test_create_offer() {
     let test_name = "lndk_create_offer";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (_, _ldk2_pubkey, _lnd_pubkey) =
@@ -721,7 +721,7 @@ async fn pay_offer_and_wait_for_payment(
 // Test that we can receive a payment from an offer.
 async fn test_receive_payment_from_offer() {
     let test_name = "lndk_receive_payment_from_offer";
-    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
 
     let (ldk1_pubkey, _ldk2_pubkey, _lnd_pubkey) =

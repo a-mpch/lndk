@@ -29,7 +29,7 @@ use tonic_lnd::lnrpc::{
 use tonic_lnd::routerrpc::TrackPaymentRequest;
 use tonic_lnd::signrpc::{KeyLocator, SignMessageReq};
 use tonic_lnd::tonic::Status;
-use tonic_lnd::Client;
+use tonic_lnd::{Client, LightningClient};
 
 #[derive(Debug)]
 /// OfferError is an error that occurs during the process of paying an offer.
@@ -117,15 +117,14 @@ impl OfferHandler {
         // For now we connect directly to the introduction node of the blinded path so we don't need
         // any intermediate nodes here. In the future we'll query for a full path to the
         // introduction node for better sender privacy.
+        let connector = client.clone().lightning().to_owned();
         match destination {
-            Destination::Node(pubkey) => connect_to_peer(client.clone(), pubkey).await?,
+            Destination::Node(pubkey) => connect_to_peer(connector, pubkey).await?,
             Destination::BlindedPath(ref path) => match path.introduction_node() {
-                IntroductionNode::NodeId(pubkey) => {
-                    connect_to_peer(client.clone(), *pubkey).await?
-                }
+                IntroductionNode::NodeId(pubkey) => connect_to_peer(connector, *pubkey).await?,
                 IntroductionNode::DirectedShortChannelId(direction, scid) => {
                     let pubkey = get_node_id(client.clone(), *scid, *direction).await?;
-                    connect_to_peer(client.clone(), pubkey).await?
+                    connect_to_peer(connector, pubkey).await?
                 }
             },
         };
@@ -139,8 +138,9 @@ impl OfferHandler {
 
         let pubkey = PublicKey::from_str(&info.identity_pubkey).unwrap();
         let message_context = MessageContext::Offers(offer_context);
+        let connector = client.clone().lightning().to_owned();
         let reply_path = Some(
-            self.create_reply_path(client.clone(), pubkey, message_context)
+            self.create_reply_path(connector, pubkey, message_context)
                 .await?,
         );
 
@@ -472,13 +472,12 @@ pub async fn connect_to_peer(
 }
 
 #[async_trait]
-impl PeerConnector for Client {
+impl PeerConnector for LightningClient {
     async fn list_peers(&mut self) -> Result<ListPeersResponse, Status> {
         let list_req = ListPeersRequest {
             ..Default::default()
         };
-        self.lightning()
-            .list_peers(list_req)
+        self.list_peers(list_req)
             .await
             .map(|resp| resp.into_inner())
     }
@@ -495,10 +494,7 @@ impl PeerConnector for Client {
             ..Default::default()
         };
 
-        self.lightning()
-            .connect_peer(connect_req.clone())
-            .await
-            .map(|_| ())
+        self.connect_peer(connect_req.clone()).await.map(|_| ())
     }
 
     async fn get_node_info(
@@ -511,10 +507,7 @@ impl PeerConnector for Client {
             include_channels,
         };
 
-        self.lightning()
-            .get_node_info(req)
-            .await
-            .map(|resp| resp.into_inner())
+        self.get_node_info(req).await.map(|resp| resp.into_inner())
     }
 }
 

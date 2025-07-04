@@ -504,12 +504,14 @@ async fn test_reply_path_unannounced_peers() {
         hmac: None,
     };
     let offer_context = MessageContext::Offers(offer_context);
+    let connector = lnd.client.clone().unwrap().lightning().to_owned();
+
     // In the small network we produced above, the lnd node is only connected to ldk2, which has a
     // private channel and as such, is an unadvertised node. Because of that, create_reply_path
     // should not use ldk2 as an introduction node and should return a reply path directly to
     // itself.
     let reply_path = handler
-        .create_reply_path(lnd.client.clone().unwrap(), lnd_pubkey, offer_context)
+        .create_reply_path(connector, lnd_pubkey, offer_context)
         .await;
     assert!(reply_path.is_ok());
     let reply_path = reply_path.unwrap();
@@ -545,8 +547,10 @@ async fn test_reply_path_announced_peers() {
     // public channel and as such, is indeed an advertised node. Because of this, we make sure
     // create_reply_path produces a path of length two with ldk2 as the introduction node, as we
     // expected.
+    let connector = lnd.client.clone().unwrap().lightning().to_owned();
+
     let reply_path = handler
-        .create_reply_path(lnd.client.clone().unwrap(), lnd_pubkey, offer_context)
+        .create_reply_path(connector, lnd_pubkey, offer_context)
         .await;
     assert!(reply_path.is_ok());
     let reply_path = reply_path.unwrap();

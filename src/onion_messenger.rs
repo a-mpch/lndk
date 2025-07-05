@@ -1,5 +1,6 @@
 use crate::clock::TokioClock;
-use crate::lnd::{features_support_onion_messages, ONION_MESSAGES_OPTIONAL};
+use crate::lnd::{features_support_onion_messages, PeerConnector, ONION_MESSAGES_OPTIONAL};
+use crate::lndk_offers::connect_to_peer;
 use crate::rate_limit::{RateLimiter, RateLimiterCfg, TokenLimiter};
 use crate::{LifecycleSignals, LndkOnionMessenger, LDK_LOGGER_NAME};
 use async_trait::async_trait;
@@ -9,6 +10,7 @@ use bitcoin::Network;
 use core::ops::Deref;
 use futures::executor::block_on;
 use lightning::blinded_path::NodeIdLookUp;
+use lightning::events::{Event, EventHandler, EventsProvider, ReplayEvent};
 use lightning::ln::msgs::{Init, OnionMessage, OnionMessageHandler};
 use lightning::onion_message::async_payments::AsyncPaymentsMessageHandler;
 use lightning::onion_message::dns_resolution::DNSResolverMessageHandler;
@@ -284,7 +286,8 @@ impl LndkOnionMessenger {
 
         // Spin up a ticker that polls at an interval for any outgoing messages so that we can pass
         // on outgoing messages to LND.
-        let interval = time::interval(MSG_POLL_INTERVAL);
+        let mut interval = time::interval(MSG_POLL_INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
         let (events_shutdown, events_listener) =
             (signals.shutdown.clone(), signals.listener.clone());
         set.spawn(async move {
@@ -311,11 +314,15 @@ impl LndkOnionMessenger {
         let mut message_sender = CustomMessenger {
             client: ln_client.clone(),
         };
+        let event_handler = LndkEventHandler {
+            lnd_client: ln_client.clone(),
+        };
         let consume_result = consume_messenger_events(
             onion_messenger,
             receiver,
             &mut message_sender,
             rate_limiter,
+            event_handler,
             network,
         )
         .await;
@@ -685,10 +692,11 @@ impl fmt::Display for MessengerEvents {
 /// consume_messenger_events receives a series of onion messaging related events and delivers them
 /// to the OnionMessenger provided, using the RateLimiter to limit resources consumed by each peer.
 async fn consume_messenger_events(
-    onion_messenger: impl OnionMessageHandler,
+    onion_messenger: impl OnionMessageHandler + EventsProvider,
     mut events: Receiver<MessengerEvents>,
     message_sender: &mut impl SendCustomMessage,
     rate_limiter: &mut impl RateLimiter,
+    event_handler: impl EventHandler,
     network: Network,
 ) -> Result<(), ConsumerError> {
     let chain_hash = ChainHash::using_genesis_block_const(network);
@@ -744,6 +752,8 @@ async fn consume_messenger_events(
                 onion_messenger.handle_onion_message(pubkey, &onion_message)
             }
             MessengerEvents::SendOutgoing => {
+                onion_messenger.process_pending_events(&event_handler);
+
                 for peer in rate_limiter.peers() {
                     if let Some(msg) = onion_messenger.next_onion_message_for_peer(peer) {
                         info!("Sending outgoing onion message to {peer}.");
@@ -850,6 +860,34 @@ async fn relay_outgoing_msg_event(
     }
 }
 
+struct LndkEventHandler<T: PeerConnector + Send + 'static + Clone> {
+    lnd_client: T,
+}
+
+impl<T: PeerConnector + Send + 'static + Clone> EventHandler for LndkEventHandler<T> {
+    fn handle_event(&self, event: Event) -> Result<(), ReplayEvent> {
+        match event {
+            Event::ConnectionNeeded {
+                node_id,
+                addresses: _,
+            } => {
+                debug!("ConnectionNeeded event received for node: {}", node_id);
+                let lnd_client = self.lnd_client.clone();
+
+                // TODO: we probably want to retry this connect_to_peer call if it fails
+                tokio::spawn(async move {
+                    if let Err(e) = connect_to_peer(lnd_client, node_id).await {
+                        error!("Failed to connect to peer: {}", e);
+                    }
+                });
+                Ok(())
+            }
+            Event::OnionMessageIntercepted { .. } => Ok(()),
+            Event::OnionMessagePeerConnected { .. } => Ok(()),
+            _ => Ok(()),
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -907,6 +945,21 @@ mod tests {
             }
     }
 
+    mock! {
+        TestPeerConnector{}
+
+        impl Clone for TestPeerConnector {
+            fn clone(&self) -> Self;
+        }
+
+         #[async_trait]
+         impl PeerConnector for TestPeerConnector {
+             async fn list_peers(&mut self) -> Result<tonic_lnd::lnrpc::ListPeersResponse, Status>;
+             async fn get_node_info(&mut self, pub_key: String, include_channels: bool) -> Result<tonic_lnd::lnrpc::NodeInfo, Status>;
+             async fn connect_peer(&mut self, node_id: String, addr: String) -> Result<(), Status>;
+         }
+    }
+
     // Mockall can't automatically produce a mock for EventsProvider since mockall requires generic
     // parameters be 'static. See: https://docs.rs/mockall/latest/mockall/#generic-traits-and-structs. So we add the trait to our
     // mock manually here.
@@ -915,7 +968,6 @@ mod tests {
         where
             H::Target: EventHandler,
         {
-            todo!()
         }
     }
 
@@ -1051,6 +1103,9 @@ mod tests {
             receiver,
             &mut sender_mock,
             &mut rate_limiter,
+            LndkEventHandler {
+                lnd_client: MockTestPeerConnector::new(),
+            },
             Network::Regtest,
         )
         .await
@@ -1080,6 +1135,9 @@ mod tests {
             receiver,
             &mut sender_mock,
             &mut rate_limiter,
+            LndkEventHandler {
+                lnd_client: MockTestPeerConnector::new(),
+            },
             Network::Regtest,
         )
         .await
@@ -1101,6 +1159,9 @@ mod tests {
             receiver_done,
             &mut sender_mock,
             &mut rate_limiter,
+            LndkEventHandler {
+                lnd_client: MockTestPeerConnector::new()
+            },
             Network::Regtest,
         )
         .await

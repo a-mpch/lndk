@@ -281,6 +281,199 @@ async fn test_lndk_send_invoice_request() {
         }
     }
 }
+// Here we test that we're able to route OnionMessages to a peer that is not connected to us.
+async fn test_lndk_route_onion_message() {
+    let test_name = "lndk_route_onion_message";
+    let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir) =
+        common::setup_test_infrastructure(test_name).await;
+
+    // Here we'll produce a little network. ldk1 will be the offer creator in this scenario. We'll
+    // connect ldk1 and ldk2 with a channel so ldk1 can create an offer and ldk2 can be the
+    // introduction node for the blinded path. We'll also connect lnd to ldk2 so lnd can route
+    // the OnionMessage to ldk2.
+    //
+    // ldk1 <--- channel ---> lnd <--- peer connection ---> ldk2
+    //
+    let (pubkey, addr) = ldk1.get_node_info();
+    let (pubkey_2, addr_2) = ldk2.get_node_info();
+
+    lnd.connect_to_peer(pubkey, addr).await;
+    lnd.connect_to_peer(pubkey_2, addr_2).await;
+
+    let ldk2_fund_addr = ldk2.bitcoind_client.get_new_address().await;
+
+    // We need to convert funding addresses to the form that the bitcoincore_rpc library recognizes.
+    let ldk2_addr_string = ldk2_fund_addr.to_string();
+    let ldk2_addr = bitcoincore_rpc::bitcoin::Address::from_str(&ldk2_addr_string)
+        .unwrap()
+        .require_network(RpcNetwork::Regtest)
+        .unwrap();
+
+    // Fund both of these nodes, open the channels, and synchronize the network.
+    bitcoind
+        .node
+        .client
+        .generate_to_address(6, &ldk2_addr)
+        .unwrap();
+
+    lnd.wait_for_chain_sync().await;
+
+    ldk2.open_channel(pubkey, addr, 200000, 0, true)
+        .await
+        .unwrap();
+
+    lnd.wait_for_graph_sync().await;
+
+    bitcoind
+        .node
+        .client
+        .generate_to_address(20, &ldk2_addr)
+        .unwrap();
+
+    lnd.wait_for_chain_sync().await;
+
+    let path_pubkeys = vec![pubkey_2, pubkey];
+    let expiration = SystemTime::now() + Duration::from_secs(24 * 60 * 60);
+    let offer = ldk1
+        .create_offer(
+            &path_pubkeys,
+            Network::Regtest,
+            20_000,
+            Quantity::One,
+            expiration,
+        )
+        .await
+        .expect("should create offer");
+
+    // Now we'll spin up lndk, which should forward the invoice request to ldk2.
+    let (shutdown, listener) = triggered::trigger();
+
+    let creds = validate_lnd_creds(
+        Some(PathBuf::from_str(&lnd.cert_path).unwrap()),
+        None,
+        Some(PathBuf::from_str(&lnd.macaroon_path).unwrap()),
+        None,
+    )
+    .unwrap();
+    let lnd_cfg = lndk::lnd::LndCfg::new(lnd.address.clone(), creds);
+
+    let signals = LifecycleSignals {
+        shutdown: shutdown.clone(),
+        listener,
+    };
+
+    let lndk_cfg = lndk::Cfg {
+        lnd: lnd_cfg.clone(),
+        signals,
+        skip_version_check: false,
+        rate_limit_count: 10,
+        rate_limit_period_secs: 1,
+    };
+
+    let mut client = lnd.client.clone().unwrap();
+    let blinded_path = offer.paths()[0].clone();
+
+    let mut stream = client
+        .lightning()
+        .subscribe_channel_graph(tonic_lnd::lnrpc::GraphTopologySubscription {})
+        .await
+        .unwrap()
+        .into_inner();
+
+    // Wait for ldk2's graph update to come through, otherwise when we try to auto-connect to
+    // the introduction node later on, the address won't be available when we call the
+    // describe_graph API method.
+    'outer: while let Some(update) = stream.message().await.unwrap() {
+        for node in update.node_updates.iter() {
+            for node_addr in node.node_addresses.iter() {
+                if node_addr.addr == addr_2.to_string() {
+                    break 'outer;
+                }
+            }
+        }
+    }
+
+    let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
+    setup_logger(None, log_file).unwrap();
+
+    // Make sure lndk successfully sends the invoice_request.
+    let handler = Arc::new(lndk::OfferHandler::default());
+    let messenger = lndk::LndkOnionMessenger::new();
+    let (invoice_request, _, _, offer_context) = handler
+        .create_invoice_request(
+            offer.clone(),
+            Network::Regtest,
+            Some(20_000),
+            Some("".to_string()),
+        )
+        .await
+        .unwrap();
+
+    let destination = Destination::BlindedPath(blinded_path.clone());
+    select! {
+        val = messenger.run(lndk_cfg, Arc::clone(&handler)) => {
+            panic!("lndk should not have completed first {:?}", val);
+        },
+        res = handler.send_invoice_request(
+            destination.clone(),
+            client.clone(),
+            invoice_request,
+            offer_context
+        ) => {
+            assert!(res.is_ok());
+        }
+    }
+
+    // Let's try again, but, make sure we can request the invoice when the LND node is not already
+    // connected to the introduction node (LDK2).
+    lnd.disconnect_peer(pubkey_2).await;
+    lnd.wait_for_chain_sync().await;
+
+    let (shutdown, listener) = triggered::trigger();
+    let signals = LifecycleSignals {
+        shutdown: shutdown.clone(),
+        listener,
+    };
+
+    let lndk_cfg = lndk::Cfg {
+        lnd: lnd_cfg,
+        signals,
+        skip_version_check: false,
+        rate_limit_count: 10,
+        rate_limit_period_secs: 1,
+    };
+
+    let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
+    setup_logger(None, log_file).unwrap();
+
+    let handler = Arc::new(lndk::OfferHandler::default());
+    let messenger = lndk::LndkOnionMessenger::new();
+    let (invoice_request, _, _, offer_context) = handler
+        .create_invoice_request(
+            offer.clone(),
+            Network::Regtest,
+            Some(20_000),
+            Some("".to_string()),
+        )
+        .await
+        .unwrap();
+    select! {
+        val = messenger.run(lndk_cfg, Arc::clone(&handler)) => {
+            panic!("lndk should not have completed first {:?}", val);
+        },
+        res = handler.send_invoice_request(
+            destination,
+            client.clone(),
+            invoice_request,
+            offer_context
+        ) => {
+            assert!(res.is_ok());
+            shutdown.trigger();
+            ldk1.stop().await;
+            ldk2.stop().await;
+        }
+    }
+}
 
 #[tokio::test(flavor = "multi_thread")]
 // Here we test that we're able to fully pay an offer.

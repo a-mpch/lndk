@@ -3,6 +3,7 @@ mod clock;
 pub mod lnd;
 pub mod lndk_offers;
 pub mod onion_messenger;
+mod peer_state;
 mod rate_limit;
 pub mod server;
 
@@ -279,6 +280,8 @@ pub struct OfferHandler {
     /// The amount of time in seconds that we will wait for the offer creator to respond with
     /// an invoice. If not provided, we will use the default value of 15 seconds.
     pub response_invoice_timeout: u32,
+    /// Peer connection state cache
+    peer_state: Arc<peer_state::PeerState>,
 }
 
 pub struct PaymentInfo {
@@ -320,6 +323,7 @@ impl OfferHandler {
             messenger_utils,
             expanded_key,
             response_invoice_timeout,
+            peer_state: Arc::new(peer_state::PeerState::new()),
         }
     }
 

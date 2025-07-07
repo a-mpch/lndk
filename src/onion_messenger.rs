@@ -860,6 +860,9 @@ async fn relay_outgoing_msg_event(
     }
 }
 
+// TODO: We should keep a "connected_peers" state in the LndkOnionMessenger that
+// can be used instead of going to LND to check if it is connected or not, because if
+// we don't have the state in LNDK we won't be able to build the route either way.
 struct LndkEventHandler<T: PeerConnector + Send + 'static + Clone> {
     lnd_client: T,
 }

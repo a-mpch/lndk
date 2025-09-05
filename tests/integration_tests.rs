@@ -99,7 +99,7 @@ async fn create_offers(
 
         let blinded_path = offer.paths()[0].clone();
         let pay_cfg = PayOfferParams {
-            offer: offer,
+            offer,
             amount: Some(20_000),
             payer_note: Some("".to_string()),
             network: Network::Regtest,
@@ -113,7 +113,7 @@ async fn create_offers(
         pay_cfgs.push(pay_cfg);
     }
 
-    return pay_cfgs;
+    pay_cfgs
 }
 
 // A future that pays the same offer three times concurrently.
@@ -128,8 +128,8 @@ async fn pay_same_offer(handler: Arc<OfferHandler>, pay_cfg: PayOfferParams) -> 
 // A future that pays different offers concurrently.
 async fn pay_offers(handler: Arc<OfferHandler>, pay_cfgs: &Vec<PayOfferParams>) -> Result<(), ()> {
     let mut futs: Vec<_> = vec![];
-    for i in 0..pay_cfgs.len() {
-        futs.push(handler.pay_offer(pay_cfgs[i].clone()));
+    for cfg in pay_cfgs {
+        futs.push(handler.pay_offer(cfg.clone()));
     }
 
     try_join_all(futs).await.map(|_| ()).map_err(|_| ())
@@ -142,7 +142,7 @@ async fn test_lndk_get_invoice() {
     let test_name = "lndk_get_invoice";
     let (bitcoind, mut lnd, ldk1, ldk2, lndk_dir, _) =
         common::setup_test_infrastructure(test_name).await;
-    let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
+    let log_file = Some(lndk_dir.join("lndk-logs.txt"));
     setup_logger(None, log_file).unwrap();
     // Here we'll produce a little network. ldk1 will be the offer creator in this scenario. We'll
     // connect ldk1 and ldk2 with a channel so ldk1 can create an offer and ldk2 can be the
@@ -255,7 +255,7 @@ async fn test_lndk_get_invoice() {
         }
     }
 
-    let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
+    let log_file = Some(lndk_dir.join("lndk-logs.txt"));
     setup_logger(None, log_file).unwrap();
 
     // Make sure lndk successfully sends the invoice_request.
@@ -298,7 +298,7 @@ async fn test_lndk_get_invoice() {
         rate_limit_period_secs: 1,
     };
 
-    let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
+    let log_file = Some(lndk_dir.join("lndk-logs.txt"));
     setup_logger(None, log_file).unwrap();
 
     let handler = Arc::new(OfferHandler::default());
@@ -727,7 +727,7 @@ async fn test_receive_payment_from_offer() {
     let (ldk1_pubkey, _ldk2_pubkey, _lnd_pubkey) =
         common::connect_network(&ldk1, &ldk2, true, true, &mut lnd, &bitcoind).await;
 
-    let log_file = Some(lndk_dir.join(format!("lndk-logs.txt")));
+    let log_file = Some(lndk_dir.join("lndk-logs.txt"));
     setup_logger(None, log_file).unwrap();
 
     let (shutdown, listener) = triggered::trigger();

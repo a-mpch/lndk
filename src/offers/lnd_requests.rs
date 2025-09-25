@@ -294,34 +294,31 @@ pub async fn create_reply_path_for_offer_creation(
     })?;
 
     let mut intro_channels = HashSet::new();
-    let mut counter = 0;
     for channel in current_channels.channels.iter() {
         let pubkey = channel.remote_pubkey.clone();
-        if counter <= 3 {
-            match connector.get_node_info(pubkey, true).await {
-                Ok(node_info) => match node_info.node {
-                    Some(node) => {
-                        if node_info.channels.is_empty() {
-                            continue;
-                        }
-                        let onion_support = features_support_onion_messages(&node.features);
-                        let other_channels = node_info
-                            .channels
-                            .into_iter()
-                            .filter(|peer_channel| peer_channel.channel_id != channel.chan_id)
-                            .collect::<Vec<tonic_lnd::lnrpc::ChannelEdge>>();
-                        if !other_channels.is_empty() && onion_support {
-                            let pubkey = PublicKey::from_str(&channel.remote_pubkey).unwrap();
-                            intro_channels.insert(pubkey);
-                            counter += 1;
-                        }
-                    }
-                    None => continue,
-                },
-                Err(_) => continue,
-            }
-        } else {
+        if intro_channels.len() > 3 {
             break;
+        }
+        match connector.get_node_info(pubkey, true).await {
+            Ok(node_info) => match node_info.node {
+                Some(node) => {
+                    if node_info.channels.is_empty() {
+                        continue;
+                    }
+                    let onion_support = features_support_onion_messages(&node.features);
+                    let other_channels = node_info
+                        .channels
+                        .into_iter()
+                        .filter(|peer_channel| peer_channel.channel_id != channel.chan_id)
+                        .collect::<Vec<tonic_lnd::lnrpc::ChannelEdge>>();
+                    if !other_channels.is_empty() && onion_support {
+                        let pubkey = PublicKey::from_str(&channel.remote_pubkey).unwrap();
+                        intro_channels.insert(pubkey);
+                    }
+                }
+                None => continue,
+            },
+            Err(_) => continue,
         }
     }
 

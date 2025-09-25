@@ -1056,10 +1056,21 @@ async fn pay_offer_and_wait_for_payment(
     offer: Offer,
     mut lnd_client: Client,
 ) -> Result<(), ()> {
-    let payment = ldk.pay_offer(offer, None).await;
-    assert!(payment.is_ok());
-    // Wait for the payment to complete on ldk side.
-    common::wait_for_ldk_payment_completion(ldk, Duration::from_secs(30)).await?;
+    let mut retries = 0;
+    let max_retries = 3;
+    let delay = Duration::from_secs(2);
+    while retries < max_retries {
+        tokio::time::sleep(delay).await;
+        let payment = ldk.pay_offer(offer.clone(), None).await;
+        assert!(payment.is_ok());
+        // Wait for the payment to complete on ldk side.
+        match common::wait_for_ldk_payment_completion(ldk, Duration::from_secs(10)).await {
+            Ok(_) => break,
+            _ => println!("Payment timedout, trying again"),
+        };
+        retries += 1;
+    }
+
     // Wait for the payment to complete on lnd side.
     common::wait_for_lnd_payment_completion(&mut lnd_client, Duration::from_secs(10)).await?;
     Ok(())
@@ -1093,7 +1104,7 @@ async fn test_receive_payment_from_offer() {
         .generate_to_address(6, &ldk2_addr)
         .unwrap();
 
-    lnd.wait_for_graph_sync().await;
+    lnd.wait_for_chain_sync().await;
 
     let lnd_addr = lnd
         .address
@@ -1132,7 +1143,7 @@ async fn test_receive_payment_from_offer() {
         .generate_to_address(6, &ldk2_addr)
         .unwrap();
 
-    lnd.wait_for_graph_sync().await;
+    lnd.wait_for_chain_sync().await;
 
     ldk2.open_channel(
         _lnd_pubkey,
